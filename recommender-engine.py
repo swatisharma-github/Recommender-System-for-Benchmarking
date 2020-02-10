@@ -21,18 +21,13 @@ for resource in resources:
         print(data)
         
                 
-list_names = list(data['Symbol'])
-list_sector = list(data['Sector'])
+list_names = list(data['Symbol']) # creating list with names of S&P 500 companies
+list_sector = list(data['Sector']) # creating list with names of S&P 500 companies corresponding industries
 
-data.Sector.value_counts()
+# data.Sector.value_counts() # counts number of unique industries
 
 data.drop(['Name'], axis=1, inplace=True) # drop extra column with full name of S&P 500 companies
 data = data.set_index('Symbol') # set ticker column as index
-
-print(list_names)
-
-mini_list = list_names[0:50]
-print(mini_list)
 
 # importing income statement data for S&P 500 companies
 from yahoofinancials import YahooFinancials
@@ -69,20 +64,17 @@ total = pd.get_dummies(total, columns=['Sector']) # generating dummy var cols (o
 print(total)
 
 from sklearn import preprocessing
+# scaling column values to be between 0 and 1 using min-max scaler
 scaler = preprocessing.MinMaxScaler()
 robust_scaled_df = total.dropna()
 robust_scaled_df['rev'] = scaler.fit_transform(robust_scaled_df['rev'].values.reshape(-1,1))
 robust_scaled_df['MTC'] = scaler.fit_transform(robust_scaled_df['MTC'].values.reshape(-1,1))
 robust_scaled_df['OM'] = scaler.fit_transform(robust_scaled_df['OM'].values.reshape(-1,1))
-robust_scaled_df['OM'].max()
-robust_scaled_df.head()
-robust_scaled_df['OM'].max()
 
-#robust_scaled_df.to_csv('/Users/Swati/Documents/Benchmarking Recommender Algorithm/cleanedset.csv')
 
-### creating user-client matrices
+### creating client-feature rows
 
-# Rnd heavy
+# example, client 1: Rnd heavy
 
 Rnd_tech = robust_scaled_df.loc[robust_scaled_df['Sector_Information Technology'] == 1]
 Rnd_tech = Rnd_tech.loc[Rnd_tech['rev'] >= 0.15]
@@ -98,7 +90,7 @@ n = len(Rnd_tech)-1
 
 Rnd_tech.drop(Rnd_tech.head(n).index,inplace=True)
 
-# manufacturing heavy
+# example, client 2: manufacturing heavy
 manuf = robust_scaled_df.loc[robust_scaled_df['Sector_Industrials'] == 1]
 manuf2 = robust_scaled_df.loc[robust_scaled_df['Sector_Materials'] == 1]
 manuf = manuf.append(manuf2)
@@ -107,7 +99,7 @@ manuf = manuf.append(manuf.mean().rename('client2')).assign(mean=lambda manuf: m
 manuf.drop(manuf.head(n).index,inplace=True)
 print(manuf)
 
-# services 
+# example, client 3: services 
 gna = robust_scaled_df.loc[robust_scaled_df['MTC'] >= 0.05]
 gna = gna.loc[gna['MTC'] <= 0.09]
 gna2 = robust_scaled_df.loc[robust_scaled_df['Sector_Financials'] == 1]
@@ -118,28 +110,23 @@ gna = gna.append(gna.mean().rename('client3')).assign(mean=lambda gna: gna.mean(
 gna.drop(gna.head(n).index, inplace = True)
 print(gna)
 
-## client-feature matrix
+## generating client-feature matrix
 client_feature_matrix = Rnd_tech.append(manuf)
 client_feature_matrix = client_feature_matrix.append(gna)
 client_feature_matrix = client_feature_matrix.drop(['mean'], axis =1)
 print(client_feature_matrix)
 
+# importing cosine similarity as a method to determine similarity (distance) between client and comparable companies
 from sklearn.metrics.pairwise import cosine_similarity
 cosine_sim = cosine_similarity(client_feature_matrix, robust_scaled_df)
-print(cosine_sim)
-
 
 indices = pd.Series(client_feature_matrix.index)
-print(indices)
 
-#  defining the function that takes in client name 
-# as input and returns the top 10 recommended comparable companies
+#  function which returns the top 10 recommended comparable companies
 def recommendations(client, cosine_sim = cosine_sim):
     
-    # initializing the empty list of recommended comparable companies
     recommended_comparables = []
     
-    # getting the index of the client that matches the inputted client name
     idx = indices[indices == client].index[0]
 
     # creating a Series with the similarity scores in descending order
@@ -148,7 +135,6 @@ def recommendations(client, cosine_sim = cosine_sim):
     # getting the indexes of the 10 most similar comparable companies
     top_10_indexes = list(score_series.iloc[0:10].index)
     
-    # populating the list with the titles of the best 10 comparable companies
     for i in top_10_indexes:
         recommended_comparables.append(list(robust_scaled_df.index)[i])
         
